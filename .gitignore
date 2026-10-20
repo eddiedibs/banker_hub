@@ -1,0 +1,25 @@
+# secrets
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+
+# local data
+*.db
+*.db-shm
+*.db-wal
+debug/
+
+# build / test
+/bin/
+*.test
+*.out
+coverage.*
+
+# editor / OS / tooling
+.idea/
+.vscode/
+.DS_Store
+.claude/settings.local.json
