@@ -617,6 +617,38 @@ func TestCustomGridIDMatchesLast25(t *testing.T) {
 	}
 }
 
+func TestParseTransactionsDetail(t *testing.T) {
+	acct := account{Value: "ACC1", Number: "01910000000012345678"}
+	txs, err := parseTransactions(fixture(t, "custom_grid_detail.html"), acct, map[string]int{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(txs) != 2 {
+		t.Fatalf("got %d transactions, want 2", len(txs))
+	}
+	want := "TELF.:580000000000 CED.:000000000 BANCO:0000 Pago Móvil BNC al Instante VET COMERCIO PRUEBA"
+	if txs[0].Detail != want {
+		t.Errorf("detail = %q, want %q", txs[0].Detail, want)
+	}
+	if txs[0].Description != txs[0].Kind {
+		t.Errorf("description = %q, want the kind %q", txs[0].Description, txs[0].Kind)
+	}
+	if txs[1].Detail != "" {
+		t.Errorf("row without the cell got detail %q", txs[1].Detail)
+	}
+
+	// The detail must not change the id.
+	plain, err := parseTransactions(`<table id="Tbl_Transactions"><tbody>
+		<tr class="cursor-pointer"><td>01/09/2026</td><td>Credito Inmediato Recibido</td><td>90000000001</td><td>51.000,00</td><td></td></tr>
+		</tbody></table>`, acct, map[string]int{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if txs[0].ID != plain[0].ID {
+		t.Errorf("detail changed the id: %s vs %s", txs[0].ID, plain[0].ID)
+	}
+}
+
 func TestAccountKey(t *testing.T) {
 	for _, tc := range []struct {
 		name string

@@ -17,7 +17,8 @@ import (
 const timeLayout = time.RFC3339
 
 // UpsertTransactions inserts txs in one database transaction. Existing rows
-// (same source and external_id) only get their status refreshed.
+// (same source and external_id) only get their status refreshed and
+// their detail filled in; an empty detail never erases a stored one.
 // It returns the number of rows inserted or updated.
 func (s *Store) UpsertTransactions(ctx context.Context, txs []model.Transaction) (int64, error) {
 	if len(txs) == 0 {
@@ -32,10 +33,13 @@ func (s *Store) UpsertTransactions(ctx context.Context, txs []model.Transaction)
 	stmt, err := tx.PrepareContext(ctx, `
 		INSERT INTO transaction_history
 			(id, source, external_id, account, kind, direction, amount, asset,
-			 status, reference, description, occurred_at, raw)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-		ON CONFLICT (source, external_id) DO UPDATE SET status = excluded.status
-		WHERE status IS NOT excluded.status`)
+			 status, reference, description, detail, occurred_at, raw)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		ON CONFLICT (source, external_id) DO UPDATE SET
+			status = excluded.status,
+			detail = COALESCE(excluded.detail, detail)
+		WHERE status IS NOT excluded.status
+			OR (excluded.detail IS NOT NULL AND detail IS NOT excluded.detail)`)
 	if err != nil {
 		return 0, err
 	}
@@ -49,7 +53,7 @@ func (s *Store) UpsertTransactions(ctx context.Context, txs []model.Transaction)
 		res, err := stmt.ExecContext(ctx,
 			t.ID, t.Source, t.ExternalID, t.Account, t.Kind, string(t.Direction),
 			t.Amount.Abs().String(), t.Asset, nullString(t.Status), nullString(t.Reference),
-			nullString(t.Description), t.OccurredAt.UTC().Format(timeLayout), nullString(t.Raw))
+			nullString(t.Description), nullString(t.Detail), t.OccurredAt.UTC().Format(timeLayout), nullString(t.Raw))
 		if err != nil {
 			return 0, fmt.Errorf("transaction %s: %w", t.ExternalID, err)
 		}
@@ -80,7 +84,7 @@ type Page struct {
 var ErrBadCursor = errors.New("invalid cursor")
 
 const selectColumns = `id, source, external_id, account, kind, direction, amount, asset,
-	status, reference, description, occurred_at, created_at`
+	status, reference, description, detail, occurred_at, created_at`
 
 // ListTransactions returns transactions newest first using keyset pagination.
 func (s *Store) ListTransactions(ctx context.Context, f Filter) (Page, error) {
@@ -226,18 +230,19 @@ type scanner interface{ Scan(dest ...any) error }
 
 func scanTransaction(r scanner) (model.Transaction, error) {
 	var (
-		t                              model.Transaction
-		direction, amount, occurred    string
-		created                        string
-		status, reference, description sql.NullString
+		t                                      model.Transaction
+		direction, amount, occurred            string
+		created                                string
+		status, reference, description, detail sql.NullString
 	)
 	err := r.Scan(&t.ID, &t.Source, &t.ExternalID, &t.Account, &t.Kind, &direction, &amount,
-		&t.Asset, &status, &reference, &description, &occurred, &created)
+		&t.Asset, &status, &reference, &description, &detail, &occurred, &created)
 	if err != nil {
 		return t, err
 	}
 	t.Direction = model.Direction(direction)
 	t.Status, t.Reference, t.Description = status.String, reference.String, description.String
+	t.Detail = detail.String
 	if t.Amount, err = decimal.NewFromString(amount); err != nil {
 		return t, fmt.Errorf("bad amount %q: %w", amount, err)
 	}

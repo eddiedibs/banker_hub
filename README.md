@@ -87,6 +87,7 @@ There is one table, `transaction_history`. Its key columns are:
 - `asset`: the real currency or coin code, for example `VES`, `USD`, `USDT` or `BTC`.
 - `amount`: a positive exact decimal stored as text, so crypto precision is kept.
 - `direction`: `debit` or `credit`.
+- `detail`: for BNC, the "Detalle de la Operación" text of the movement (for example the counterparty phone, cédula and bank). It holds personal data, so treat the database and API responses as sensitive. Re-syncing a date range fills it in for rows stored earlier.
 - `raw`: the original JSON or HTML row.
 
 The view `transaction_history_display` adds `currency_label`: `Bs` for VES, `$` for USD and USD stablecoins, otherwise the asset code.

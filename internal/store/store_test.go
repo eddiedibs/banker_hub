@@ -88,6 +88,43 @@ func TestUpsertUpdatesStatus(t *testing.T) {
 	}
 }
 
+func TestUpsertFillsDetailAndKeepsIt(t *testing.T) {
+	ctx := context.Background()
+	s := openTest(t)
+	row := tx("a", time.Now().UTC().Truncate(time.Second), model.Credit, "1", "VES")
+	if _, err := s.UpsertTransactions(ctx, []model.Transaction{row}); err != nil {
+		t.Fatal(err)
+	}
+	if got, _ := s.GetTransaction(ctx, row.ID); got.Detail != "" {
+		t.Fatalf("detail = %q, want empty", got.Detail)
+	}
+
+	row.Detail = "BANCO:0000 Pago Móvil"
+	if n, err := s.UpsertTransactions(ctx, []model.Transaction{row}); err != nil || n != 1 {
+		t.Fatalf("fill: n=%d err=%v, want 1", n, err)
+	}
+	if got, _ := s.GetTransaction(ctx, row.ID); got.Detail != row.Detail {
+		t.Errorf("detail = %q, want %q", got.Detail, row.Detail)
+	}
+	if n, err := s.UpsertTransactions(ctx, []model.Transaction{row}); err != nil || n != 0 {
+		t.Fatalf("repeat: n=%d err=%v, want 0", n, err)
+	}
+
+	row.Detail = ""
+	if n, err := s.UpsertTransactions(ctx, []model.Transaction{row}); err != nil || n != 0 {
+		t.Fatalf("empty: n=%d err=%v, want 0", n, err)
+	}
+	if got, _ := s.GetTransaction(ctx, row.ID); got.Detail != "BANCO:0000 Pago Móvil" {
+		t.Errorf("empty detail erased the stored one: %q", got.Detail)
+	}
+
+	var detail string
+	err := s.db.QueryRowContext(ctx, "SELECT detail FROM transaction_history_display WHERE id = ?", row.ID).Scan(&detail)
+	if err != nil || detail != "BANCO:0000 Pago Móvil" {
+		t.Errorf("display view detail = %q, err=%v", detail, err)
+	}
+}
+
 func TestListPaginatesNewestFirst(t *testing.T) {
 	ctx := context.Background()
 	s := openTest(t)

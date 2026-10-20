@@ -36,6 +36,7 @@ type Transaction struct {
 	Status      string          `json:"status,omitempty"`
 	Reference   string          `json:"reference,omitempty"`
 	Description string          `json:"description,omitempty"`
+	Detail      string          `json:"detail,omitempty"`
 	OccurredAt  time.Time       `json:"occurred_at"`
 	Raw         string          `json:"-"`
 	CreatedAt   time.Time       `json:"created_at,omitzero"`

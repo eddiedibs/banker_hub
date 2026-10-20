@@ -89,8 +89,9 @@ func parseTotalRows(html string) (int, bool) {
 }
 
 // parseTransactions reads the #Tbl_Transactions grid. Each movement is a
-// tr.cursor-pointer row (date, type, reference, amount) followed by a
-// collapsible detail row holding the description.
+// tr.cursor-pointer row (date, type, reference, amount). The page script
+// builds the "Detalle de la Operación" panel from a hidden cell of the same
+// row, which Detail reads; it is not part of the id hash.
 //
 // seen counts identical rows so two equal movements on one day keep
 // distinct ids. The count is stable because BNC lists rows in order. Pass
@@ -159,6 +160,7 @@ func parseTransactions(html string, acct account, seen map[string]int) ([]model.
 			Status:      "completed",
 			Reference:   reference,
 			Description: description,
+			Detail:      rowDetail(row),
 			OccurredAt:  date.UTC(),
 			Raw:         rawHTML,
 		})
@@ -190,6 +192,12 @@ func accountKey(a account) string {
 		return m[1]
 	}
 	return a.Value
+}
+
+// rowDetail reads the "Detalle de la Operación" text from the hidden cell of
+// a grid row. It is empty when the row has no such cell.
+func rowDetail(row *goquery.Selection) string {
+	return collapseSpaces(row.Find("td .font-size-custom").First().Text())
 }
 
 func detailText(row *goquery.Selection) string {
